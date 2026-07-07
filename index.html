@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PartsCheck Portal — Margin Rule Management (MSO) — Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#eef0f2;color:#333;font-size:13px;line-height:1.5}
+a{color:#3aa54f;text-decoration:none;cursor:pointer}
+
+/* ---------- prototype note (plain, not part of the product) ---------- */
+.proto-note{background:#fff8dc;border-bottom:1px solid #e6d68a;color:#6b5900;font-size:11.5px;padding:6px 18px;text-align:center}
+
+/* ---------- org top bar (matches the actual CCR Group admin portal chrome — NOT the repairer-facing Dashboard/Get Price nav) ---------- */
+.orgbar{background:#f3f3f3;border-bottom:1px solid #e0e0e0;height:56px;display:flex;align-items:center;padding:0 22px;gap:16px}
+.orgbar-logo{font-size:18px;font-weight:bold;color:#3a5f8a}
+.orgbar-burger{font-size:18px;color:#555;cursor:pointer}
+.orgbar-right{margin-left:auto;display:flex;align-items:center;gap:20px;color:#666;font-size:16px}
+.orgbar-right span{cursor:pointer}
+
+/* ---------- body layout: left sidebar + content, same as Supplier Management ---------- */
+.body-layout{display:flex;min-height:calc(100vh - 82px)}
+.sidebar{width:230px;background:#fff;border-right:1px solid #ddd;flex-shrink:0;padding-bottom:40px}
+.sb-org{padding:16px 18px 14px;border-bottom:1px solid #eee}
+.sb-org-name{font-size:14px;font-weight:bold;color:#333}
+.sb-org-sub{font-size:11px;color:#999;margin-top:2px;cursor:pointer}
+.sb-nav{padding:6px 0}
+.sb-item{padding:11px 18px;font-size:13px;color:#555;cursor:pointer;border-bottom:1px solid #f2f2f2}
+.sb-item:hover{background:#f7f7f7}
+.sb-group-head{padding:11px 18px;font-size:13px;color:#333;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f2f2f2;font-weight:bold}
+.sb-group-head.open{background:#f7f9f5}
+.sb-chevron{font-size:10px;color:#999}
+.sb-sub{background:#fafafa}
+.sb-subitem{padding:9px 18px 9px 32px;font-size:12.5px;color:#666;cursor:pointer;border-bottom:1px solid #f2f2f2}
+.sb-subitem:hover{background:#f0f0f0}
+.sb-subitem.active{color:#2c7a34;font-weight:bold;border-left:3px solid #3aa54f;padding-left:29px;background:#f2f8f0}
+
+.content{flex:1;padding:22px 26px 60px;min-width:0}
+
+/* ---------- page header ---------- */
+.page-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:18px}
+.page-title{font-size:23px;font-weight:bold;color:#2a2a2a;margin-bottom:6px}
+.page-sub{font-size:12.5px;color:#777;max-width:760px;line-height:1.6}
+
+/* ---------- tabs (mirrors Repairer / Supplier / VehicleMake tab row) ---------- */
+.view-tabs{display:flex;background:#eee;border-bottom:1px solid #ddd;border-radius:6px 6px 0 0;overflow:hidden;margin-bottom:0}
+.view-tab{padding:11px 22px;font-size:13px;color:#3a6ea5;cursor:pointer;border-right:1px solid #e2e2e2}
+.view-tab.active{background:#fff;color:#222;font-weight:bold;border-bottom:2px solid #fff;margin-bottom:-1px}
+.tabs-panel{background:#fff;border:1px solid #ddd;border-top:none;border-radius:0 0 6px 6px;padding:20px 22px;margin-bottom:18px}
+
+/* ---------- filter panel (mirrors Supplier Management filter block) ---------- */
+.filter-panel{display:flex;gap:26px}
+.filter-map{width:150px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;padding-top:6px}
+.filter-map svg{width:120px;fill:#3aa54f;opacity:.9}
+.filter-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:18px 24px}
+.f-label{font-size:12.5px;font-weight:bold;color:#333;margin-bottom:6px;display:block}
+.f-box{border:1px solid #ccc;border-radius:5px;background:#fff;padding:8px 10px;min-height:36px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.f-box select,.f-box input[type=text]{border:none;outline:none;font-size:12.5px;color:#333;width:100%;background:transparent}
+.f-box.placeholder select,.f-box.placeholder{color:#999}
+.f-chip{display:inline-flex;align-items:center;gap:6px;background:#f0f0f0;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;color:#333}
+.f-chip .x{color:#999;cursor:pointer;font-size:12px}
+.f-select-hint{font-size:10.5px;color:#999;margin-top:4px;line-height:1.4}
+.f-combo{position:relative}
+.f-combo-input{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #ccc;border-radius:5px;background:#fff;padding:6px 8px;min-height:36px;cursor:text}
+.f-combo-placeholder{color:#999;font-size:12.5px}
+.f-combo-search{border:none;outline:none;font-size:12.5px;flex:1;min-width:60px;background:transparent}
+.f-combo-list{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:90;max-height:230px;overflow-y:auto}
+.f-combo-list.show{display:block}
+.f-combo-row{padding:9px 12px;font-size:12.5px;color:#333;cursor:pointer;border-bottom:1px solid #f2f2f2}
+.f-combo-row:last-child{border-bottom:none}
+.f-combo-row:hover{background:#eaf2fb}
+.f-combo-empty{color:#999;cursor:default}
+.f-combo-empty:hover{background:none}
+.filter-reset-row{display:flex;justify-content:flex-end;margin-top:14px}
+.filter-reset-row a{font-size:12px;color:#3a6ea5;font-weight:bold}
+
+/* ---------- results header + collapsible group ---------- */
+.results-line{font-size:13px;color:#555;margin:16px 0 10px}
+.results-line b{color:#333}
+.group{background:#fff;border:1px solid #ddd;border-radius:6px;margin-bottom:14px}
+.group-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:#f7f7f7;border-bottom:1px solid #ddd;cursor:pointer}
+.group-head-title{font-size:13px;font-weight:normal;color:#444}
+.group-caret{font-size:12px;color:#777}
+
+.btn{padding:8px 16px;border-radius:6px;font-size:12px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px}
+.btn-green{background:#3aa54f;color:#fff}
+.btn-green:hover{background:#2f8a41}
+.btn-outline{background:#fff;border:1px solid #ccc;color:#555}
+.btn-outline:hover{background:#f5f5f5}
+.btn-blue{background:#2f7fd1;color:#fff}
+.btn-blue:hover{background:#276bb0}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- summary page ---------- */
+.summary-filterbar{background:#fff;border:1px solid #ddd;border-radius:6px;padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;gap:26px;flex-wrap:wrap}
+.summary-filterbar .f-item label{display:block;font-size:11.5px;font-weight:bold;color:#333;margin-bottom:6px}
+.summary-filterbar select{padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:12.5px;color:#333;font-family:Arial,Helvetica,sans-serif;min-width:170px}
+.summary-filterbar .btn{margin-left:auto}
+.summary-legend{display:flex;gap:18px;align-items:center;margin-bottom:12px;font-size:11.5px;color:#666}
+.legend-chip{display:inline-flex;align-items:center;gap:6px}
+.legend-swatch{width:12px;height:12px;border-radius:2px;display:inline-block}
+table.summary-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+.summary-table th{text-align:left;font-size:11.5px;font-weight:bold;color:#555;padding:10px 14px;border-bottom:2px solid #ddd;background:#fafafa;white-space:nowrap}
+.summary-table td{padding:11px 14px;border-bottom:1px solid #eee;font-size:12.5px;color:#333;text-align:center;white-space:nowrap}
+.summary-table tr:hover td{background:#fbfdfb}
+.summary-cell-missing{background:#fffbea;color:#a67519;font-weight:bold}
+.summary-cell-mismatch{background:#fff3e6;color:#b5540c;font-weight:bold}
+
+/* ---------- table ---------- */
+table.rules-table{width:100%;border-collapse:collapse}
+.rules-table thead th{text-align:left;font-size:11.5px;font-weight:bold;color:#555;padding:10px 14px;border-bottom:2px solid #ddd;background:#fafafa;white-space:nowrap}
+.rules-table thead th .sort{color:#bbb;font-size:9px;margin-left:3px}
+.rules-table td{padding:12px 14px;border-bottom:1px solid #eee;font-size:12.5px;color:#333;vertical-align:middle}
+.rules-table tbody tr:hover{background:#fbfdfb}
+.rules-table tbody tr.editing{background:#f4faf3}
+.rules-table tbody tr.mixed td{background:#fffaf0}
+.rules-table td.num{font-weight:bold;text-align:center}
+.rules-table td.num small{display:block;font-weight:normal;font-size:9.5px;color:#c98a1e;margin-top:1px}
+.rule-name-cell{font-weight:bold;color:#333}
+.rule-default-tag{font-size:10.5px;color:#999;font-weight:normal;margin-top:1px}
+.sites-note{font-size:11px;color:#888;margin-top:1px}
+.method-note{font-size:10px;color:#888;font-weight:normal;margin-top:1px}
+.mixed-tag{color:#c98a1e;font-weight:bold}
+
+.icon-btn-sm{border:1px solid #ccc;background:#fff;border-radius:5px;width:26px;height:24px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#555}
+.icon-btn-sm:hover{background:#f2f2f2}
+.icon-btn-edit{background:#3aa54f;border-color:#3aa54f;color:#fff}
+.icon-btn-edit:hover{background:#2f8a41}
+
+/* ---------- inline edit panel (expands under the row) ---------- */
+.edit-panel-row td{background:#fbfdfb;padding:0;border-bottom:2px solid #cfe6cf}
+.edit-panel{padding:16px 20px 18px}
+.ep-title{font-size:13px;font-weight:bold;color:#2c7a34;margin-bottom:10px}
+.impact-note{display:flex;align-items:flex-start;gap:8px;background:#fdf1d6;border:1px solid #ecd191;border-radius:5px;padding:9px 12px;font-size:12px;color:#7a5b12;margin-bottom:14px}
+.impact-note b{color:#5c4409}
+.impact-note.solo{background:#eef6ee;border-color:#cfe6cf;color:#2c5a2f}
+
+.margin-table{width:100%;border:1px solid #ddd;border-radius:5px;background:#fff;margin-bottom:16px}
+.margin-table th{text-align:left;font-size:11px;font-weight:bold;color:#555;padding:8px 12px;background:#fafafa;border-bottom:1px solid #ddd}
+.margin-table td{padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:12.5px}
+.margin-table tr:last-child td{border-bottom:none}
+.pt-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:middle}
+.margin-input{width:60px;border:1px solid #ccc;border-radius:5px;padding:5px 6px;font-size:12.5px;text-align:right}
+.margin-input.warn{border-color:#e0b34a;background:#fffdf6}
+.pct-suffix{color:#888;margin-left:3px}
+.mixed-hint{font-size:10px;color:#c98a1e;margin-left:8px}
+.method-select{border:1px solid #ccc;border-radius:5px;padding:5px 6px;font-size:12px;color:#555;margin-left:10px}
+
+.ep-cols{display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap}
+.ep-col{flex:1;min-width:260px}
+.ep-col-label{font-size:11.5px;font-weight:bold;color:#333;margin-bottom:8px}
+
+.applies-box{border:1px solid #ccc;border-radius:5px;background:#fff;padding:8px 10px;min-height:38px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.applies-add{font-size:11.5px;color:#3aa54f;font-weight:bold;cursor:pointer}
+
+.ep-footer{display:flex;justify-content:flex-end;gap:10px}
+
+/* ---------- Create / Edit modal (mirrors real "Create Margin Rule" modal) ---------- */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:500;padding:24px}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:8px;max-width:760px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 6px 30px rgba(0,0,0,.3)}
+.modal-head{background:#3aa54f;color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:16px;font-weight:bold}
+.modal-head button{background:none;border:none;color:#fff;font-size:16px;cursor:pointer}
+.modal-body{padding:22px 24px}
+.modal-intro{font-size:12.5px;color:#666;margin-bottom:18px;line-height:1.6}
+.section-head{font-size:13px;font-weight:bold;color:#333;border-bottom:1px solid #ddd;padding-bottom:8px;margin-bottom:14px}
+.form-grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+.form-grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:18px}
+.ff label{display:block;font-size:11.5px;font-weight:bold;color:#333;margin-bottom:5px}
+.ff input[type=text],.ff select{width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:5px;font-size:12.5px;color:#333;font-family:Arial,Helvetica,sans-serif}
+.status-toggle{display:flex;gap:8px}
+.status-pill{flex:1;text-align:center;padding:7px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px;cursor:pointer;color:#777}
+.status-pill.active{border-color:#3aa54f;color:#2c7a34;background:#eef6ee;font-weight:bold}
+.status-pill .sdot{width:7px;height:7px;border-radius:50%;background:#bbb;display:inline-block;margin-right:5px}
+.status-pill.active .sdot{background:#3aa54f}
+.toggle-row{display:flex;align-items:center;gap:10px;margin-top:4px}
+.toggle-sw{width:36px;height:18px;border-radius:10px;background:#3aa54f;position:relative;cursor:pointer;flex-shrink:0}
+.toggle-sw::after{content:'';position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.toggle-label{font-size:11.5px;color:#777}
+
+.example-box{background:#fafafa;border:1px solid #eee;border-radius:5px;padding:14px 16px;display:flex;gap:32px;margin-bottom:18px;flex-wrap:wrap}
+.example-item b{font-size:12px;color:#333;display:block;margin-bottom:5px}
+.example-item div{font-size:11.5px;color:#777;line-height:1.6}
+
+.modal-foot{padding:14px 24px;border-top:1px solid #ddd;display:flex;justify-content:flex-end;gap:10px}
+
+.note-callout{background:#eef4fb;border:1px solid #cfe0f2;border-radius:5px;padding:10px 12px;font-size:11.5px;color:#3a5a78;margin-bottom:16px;line-height:1.6}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;bottom:22px;right:22px;background:#fff;border-left:4px solid #3aa54f;box-shadow:0 3px 12px rgba(0,0,0,.18);padding:12px 16px;font-size:12.5px;color:#333;display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(10px);transition:.2s;z-index:700}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast .tick{color:#3aa54f;font-weight:bold}
+
+.empty-hint{padding:34px;text-align:center;color:#999;font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="proto-note">Prototype for review — not connected to live data. Built from the 6 Jul discovery call with Luke Burgmann. Uses the same org top bar / left sidebar / filter panel / table and Create Rule modal conventions as the current Supplier Management and Margin Settings screens.</div>
+
+<div class="orgbar">
+  <span class="orgbar-burger">☰</span>
+  <div class="orgbar-logo">CCR Group</div>
+  <div class="orgbar-right">
+    <span title="Announcements">🔊</span>
+    <span title="Log out">⇥</span>
+  </div>
+</div>
+
+<div class="body-layout">
+  <div class="sidebar">
+    <div class="sb-org">
+      <div class="sb-org-name">CCR GROUP</div>
+      <div class="sb-org-sub">ccrgroup ▾</div>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-item">Dashboard</div>
+      <div class="sb-item">Reporting</div>
+      <div class="sb-item">Variance Report</div>
+      <div class="sb-group-head">Supplier Managment <span class="sb-chevron">▸</span></div>
+      <div class="sb-group-head open">Margin Rule Management <span class="sb-chevron">▾</span></div>
+      <div class="sb-sub">
+        <div class="sb-subitem active" id="navList" onclick="switchPage('list')">Margin Rules List</div>
+        <div class="sb-subitem" id="navSummary" onclick="switchPage('summary')">Summary</div>
+      </div>
+      <div class="sb-item">Tender</div>
+      <div class="sb-item">PartsCheck Site Logins</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="pageList">
+    <div class="page-head-row">
+      <div>
+        <div class="page-title">Margin Rule Management</div>
+        <div class="page-sub">Manage insurer margin rules across your sites from one place — the same rule can be viewed and edited for one site or applied to a group in a single action. Estimators continue to see a view-only version of these rules on the Check Price screen.</div>
+      </div>
+      <button class="btn btn-green" onclick="openCreateModal()">Create Rule ✎</button>
+    </div>
+
+    <!-- TABS -->
+    <div class="view-tabs">
+      <div class="view-tab active" id="tabInsurer" onclick="switchView('insurer')">By Insurer</div>
+      <div class="view-tab" id="tabSite" onclick="switchView('site')">By Site</div>
+    </div>
+    <div class="tabs-panel">
+
+    <!-- FILTER PANEL -->
+    <div class="filter-panel">
+      <div class="filter-map">
+        <svg viewBox="0 0 135 120">
+          <path d="M18 10 C30 4 55 2 68 8 C82 5 100 8 112 18 C124 24 130 34 128 44 C133 50 130 60 122 62 C124 70 118 78 110 78 C112 86 104 92 96 90 C92 98 80 100 72 96 C64 102 50 100 44 94 C34 96 24 90 22 80 C12 78 4 68 6 58 C-2 52 0 40 8 34 C4 26 8 16 18 10 Z"/>
+          <ellipse cx="30" cy="106" rx="7" ry="4"/>
+        </svg>
+      </div>
+      <div style="flex:1">
+        <div class="filter-grid">
+          <div>
+            <label class="f-label">Select States</label>
+            <div class="f-box placeholder"><select><option>All States</option></select></div>
+          </div>
+          <div>
+            <label class="f-label">Part Type</label>
+            <div class="f-box placeholder"><select><option>All Part Types</option></select></div>
+          </div>
+
+          <div>
+            <label class="f-label">Select Insurers</label>
+            <div class="f-combo" id="insurerFilterBox"></div>
+            <div class="f-select-hint">Options reflect insurers configured at the site(s) selected below</div>
+          </div>
+          <div>
+            <label class="f-label">Status:</label>
+            <div class="f-box placeholder"><select><option>All</option><option>Active</option><option>Inactive</option></select></div>
+          </div>
+
+          <div>
+            <label class="f-label">Select Sites</label>
+            <div class="f-combo" id="siteFilterBox"></div>
+          </div>
+          <div>
+            <label class="f-label">Filter:</label>
+            <div class="f-box placeholder"><select><option>None</option></select></div>
+          </div>
+        </div>
+        <div class="filter-reset-row"><a onclick="resetFilters()">Reset All Filters</a></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="mainView"></div>
+    </div>
+
+    <div id="pageSummary" style="display:none"></div>
+
+  </div>
+</div>
+
+<!-- CREATE / EDIT MODAL -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTitle">Create Margin Rule</h3>
+      <button onclick="closeCreateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-intro">This rule controls how part prices are calculated when quoting for an insurer. When active, it will automatically apply margins to quotes that match its conditions — for every site it is applied to.</div>
+
+      <div class="section-head">Basic Information</div>
+      <div class="form-grid4">
+        <div class="ff"><label>Rule Name *</label><input type="text" id="mRuleName" placeholder="e.g. RACQ Standard"></div>
+        <div class="ff"><label>Insurer *</label>
+          <select id="mInsurer"><option>Allianz</option><option>AAMI</option><option>Suncorp</option><option>IAG</option><option>RACQ</option><option>QBE</option></select>
+        </div>
+        <div class="ff"><label>Price Mode *</label>
+          <select><option>Fixed</option><option>Tiered</option></select>
+        </div>
+        <div class="ff"><label>Status</label>
+          <div class="status-toggle">
+            <div class="status-pill active" id="statusActive" onclick="setStatus(true)"><span class="sdot"></span>Active</div>
+            <div class="status-pill" id="statusInactive" onclick="setStatus(false)"><span class="sdot"></span>Inactive</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid2">
+        <div class="ff"><label>Description</label><input type="text" placeholder="Brief notes about this rule"></div>
+        <div class="ff"><label>Make Default</label>
+          <div class="toggle-row"><div class="toggle-sw"></div><span class="toggle-label">Auto-apply to new quotes</span></div>
+        </div>
+      </div>
+
+      <div class="section-head">Applies To Sites</div>
+      <div class="note-callout">New in Phase 2 — one rule can now be assigned to multiple sites at once. Editing margins below will update every site listed here in a single save.</div>
+      <div class="applies-box" id="modalSiteChips"></div>
+      <div class="applies-add" onclick="modalSelectAllSites()">+ Select all 6 sites</div>
+
+      <div class="section-head">Margin Settings</div>
+      <table class="margin-table" id="modalMarginTable"></table>
+
+      <div class="example-box">
+        <div class="example-item"><b>OEM - 100% of List</b><div>List Price = $200<br>Charge = 100 x $200<br>Sell Price = $200</div></div>
+        <div class="example-item"><b>Aftermarket - 20% Mark up on Cost</b><div>Cost = $200<br>Markup = 20% x $200 = $40<br>Sell Price = $240</div></div>
+        <div class="example-item"><b>Reconditioned - 70% of List</b><div>List Price = $450<br>Charge = 70% x $450 = $315<br>Sell Price = $315</div></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-green" onclick="saveModalRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="tick">✓</span><span id="toastMsg"></span></div>
+
+<script>
+/* ---------- DATA ---------- */
+const PART_TYPES = [
+  {key:'oem', label:'OEM', color:'#2f6fb3'},
+  {key:'aftermarket', label:'Aftermarket', color:'#8e5bc4'},
+  {key:'recon', label:'Reconditioned', color:'#3aa54f'},
+  {key:'parallel', label:'Parallel', color:'#e08a2e'},
+  {key:'recycled', label:'Recycled', color:'#8a8a8a'},
+];
+// table column order follows Luke's requested usage-volume sequence (OEM, Parallel, Aftermarket, Recycled, Recon)
+const COLUMN_ORDER = ['oem','parallel','aftermarket','recycled','recon'];
+
+const SITES = [
+  {id:'s1', name:'CCR Sumner Park', state:'QLD'},
+  {id:'s2', name:'CCR Springwood', state:'QLD'},
+  {id:'s3', name:'CCR Ipswich', state:'QLD'},
+  {id:'s4', name:'CCR Toowoomba', state:'QLD'},
+  {id:'s5', name:'CCR Gold Coast', state:'QLD'},
+  {id:'s6', name:'CCR Sunshine Coast', state:'QLD'},
+];
+const INSURERS = ['Allianz','AAMI','Suncorp','IAG'];
+const GROUP_NAME = 'CCR Group';
+
+// Pricing method is a per-rule, per-part-type setting (same across every site
+// the rule applies to) — only the margin % varies by site.
+const DEFAULT_METHODS = {oem:'Charge of List', parallel:'Markup on Cost', aftermarket:'Markup on Cost', recycled:'Markup on Cost', recon:'Markup on Cost'};
+
+// Allianz intentionally inconsistent across sites — mirrors the real scenario
+// Luke described (head office wants 30% -> 32% everywhere, had to edit ~18
+// shops individually because there was no bulk-update path).
+let RULES = [
+  { id:'r_allianz', name:'Allianz', insurer:'Allianz', isDefault:true, methods:{...DEFAULT_METHODS},
+    bySite:{
+      s1:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s2:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s3:{oem:28,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s4:{oem:28,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s5:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s6:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
+    }},
+  { id:'r_aami', name:'AAMI', insurer:'AAMI', isDefault:false, methods:{...DEFAULT_METHODS},
+    bySite:{
+      s1:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s2:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s3:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s4:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20},
+      s5:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s6:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20},
+    }},
+  { id:'r_suncorp', name:'Suncorp', insurer:'Suncorp', isDefault:false, methods:{...DEFAULT_METHODS},
+    bySite:{
+      s1:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70}, s2:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70},
+      s3:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70}, s4:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70},
+      s5:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70}, s6:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70},
+    }},
+  { id:'r_iag', name:'IAG', insurer:'IAG', isDefault:false, methods:{...DEFAULT_METHODS},
+    bySite:{ s1:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s3:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s5:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20} } },
+];
+
+let selectedSites = new Set(SITES.map(s=>s.id));
+let selectedInsurers = new Set(INSURERS);
+let currentView = 'insurer'; // 'insurer' | 'site'
+let editingRuleId = null; // used by the "By Insurer" view
+let editingSiteKey = null; // used by the "By Site" view, format "<siteId>::<ruleId>"
+let modalSites = new Set(SITES.map(s=>s.id));
+let modalStatusActive = true;
+
+/* ---------- HELPERS ---------- */
+function siteName(id){ return SITES.find(s=>s.id===id)?.name || id; }
+function ruleSitesInSelection(rule){ return Object.keys(rule.bySite).filter(sid => selectedSites.has(sid) && selectedInsurers.has(rule.insurer)); }
+function fieldStats(rule, key, scope){
+  const vals = scope.map(sid => rule.bySite[sid][key]);
+  const unique = [...new Set(vals)];
+  return {mixed: unique.length>1, value: unique.length===1?unique[0]:null, min:Math.min(...vals), max:Math.max(...vals)};
+}
+
+/* ---------- FILTER COMBOBOXES (search input + chips + dropdown list, matching the real Suppliers/Repairers field) ---------- */
+function insurersAvailableFor(siteIdSet){
+  return INSURERS.filter(ins => RULES.some(r => r.insurer===ins && [...siteIdSet].some(sid=>r.bySite[sid])));
+}
+
+let openComboId = null; // 'siteFilterBox' | 'insurerFilterBox' | null
+
+function renderComboBox(id, options, selectedSet, allLabel){
+  const chips = [...selectedSet].map(val=>{
+    const label = options.find(o=>o.id===val)?.label || val;
+    return `<span class="f-chip">${label} <span class="x" onclick="event.stopPropagation();removeComboItem('${id}','${val}')">✕</span></span>`;
+  }).join('');
+  const remaining = options.filter(o=>!selectedSet.has(o.id));
+  const rows = remaining.length
+    ? remaining.map(o=>`<div class="f-combo-row" onclick="event.stopPropagation();selectComboItem('${id}','${o.id}')">${o.label}</div>`).join('')
+    : `<div class="f-combo-row f-combo-empty">No more options</div>`;
+
+  return `
+    <div class="f-combo-input" onclick="event.stopPropagation();openCombo('${id}')">
+      ${chips}
+      ${selectedSet.size===0 ? `<span class="f-combo-placeholder">${allLabel}</span>` : ''}
+      <input type="text" class="f-combo-search" oninput="filterCombo('${id}', this.value)">
+    </div>
+    <div class="f-combo-list ${openComboId===id?'show':''}" id="${id}_list">${rows}</div>`;
+}
+
+function renderFilterChips(){
+  document.getElementById('siteFilterBox').innerHTML = renderComboBox(
+    'siteFilterBox', SITES.map(s=>({id:s.id, label:s.name})), selectedSites, 'All Sites'
+  );
+
+  const availableInsurers = insurersAvailableFor(selectedSites);
+  // Insurer selection can only include insurers that actually have a rule at the currently selected site(s).
+  selectedInsurers = new Set([...selectedInsurers].filter(i=>availableInsurers.includes(i)));
+  if(selectedInsurers.size===0) selectedInsurers = new Set(availableInsurers);
+
+  document.getElementById('insurerFilterBox').innerHTML = renderComboBox(
+    'insurerFilterBox', availableInsurers.map(i=>({id:i, label:i})), selectedInsurers, 'All Insurers'
+  );
+}
+
+function openCombo(id){
+  openComboId = (openComboId===id) ? null : id;
+  renderFilterChips();
+}
+function filterCombo(id, text){
+  // filter rows in place (no re-render) so the search input never loses focus mid-keystroke
+  const q = text.toLowerCase();
+  document.querySelectorAll(`#${id}_list .f-combo-row`).forEach(row=>{
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function selectComboItem(id, val){
+  if(id==='siteFilterBox') selectedSites.add(val); else selectedInsurers.add(val);
+  editingRuleId=null; editingSiteKey=null;
+  renderAll();
+}
+function removeComboItem(id, val){
+  const set = id==='siteFilterBox' ? selectedSites : selectedInsurers;
+  set.delete(val);
+  if(set.size===0) set.add(val); // never allow filtering down to zero — mirrors the previous chip behaviour
+  editingRuleId=null; editingSiteKey=null;
+  renderAll();
+}
+document.addEventListener('click', (e)=>{
+  if(openComboId && !e.target.closest('.f-combo')){
+    openComboId = null;
+    renderFilterChips();
+  }
+});
+
+function resetFilters(){
+  selectedSites = new Set(SITES.map(s=>s.id));
+  selectedInsurers = new Set(INSURERS);
+  editingRuleId=null; editingSiteKey=null; openComboId=null;
+  renderAll();
+  showToast('Filters reset');
+}
+
+/* ---------- VIEW SWITCHING ---------- */
+function switchView(view){
+  currentView = view;
+  editingRuleId=null; editingSiteKey=null;
+  document.getElementById('tabInsurer').classList.toggle('active', view==='insurer');
+  document.getElementById('tabSite').classList.toggle('active', view==='site');
+  renderMainView();
+}
+
+function renderMainView(){
+  document.getElementById('mainView').innerHTML = currentView==='site' ? buildSiteViewHTML() : buildInsurerViewHTML();
+}
+
+/* ---------- PAGE SWITCHING (Margin Rules List vs Summary) ---------- */
+let currentPage = 'list'; // 'list' | 'summary'
+let summaryInsurer = 'all';
+let summarySite = 'all';
+
+function switchPage(page){
+  currentPage = page;
+  document.getElementById('navList').classList.toggle('active', page==='list');
+  document.getElementById('navSummary').classList.toggle('active', page==='summary');
+  document.getElementById('pageList').style.display = page==='list' ? '' : 'none';
+  document.getElementById('pageSummary').style.display = page==='summary' ? '' : 'none';
+  if(page==='summary') renderSummaryPage();
+}
+
+function renderSummaryPage(){
+  document.getElementById('pageSummary').innerHTML = buildSummaryPageHTML();
+}
+
+/* For a given rule + part type, work out the majority ("expected") margin %
+   across sites that have this rule, so we can flag sites that don't match it. */
+function expectedValueFor(rule, partType){
+  const vals = Object.values(rule.bySite).map(s=>s[partType]);
+  const counts = {};
+  vals.forEach(v=>{ counts[v] = (counts[v]||0)+1; });
+  let best=null, bestCount=-1;
+  Object.entries(counts).forEach(([v,c])=>{ if(c>bestCount){ best=Number(v); bestCount=c; } });
+  return best;
+}
+
+function buildSummaryPageHTML(){
+  const sites = SITES.filter(s => summarySite==='all' || s.id===summarySite);
+  const insurers = INSURERS.filter(i => summaryInsurer==='all' || i===summaryInsurer);
+
+  const legend = `<div class="summary-legend">
+      <span class="legend-chip"><span class="legend-swatch" style="background:#fffbea;border:1px solid #f0d98a"></span> No rule configured</span>
+      <span class="legend-chip"><span class="legend-swatch" style="background:#fff3e6;border:1px solid #f3c495"></span> Margin doesn't match this insurer's majority setting</span>
+    </div>`;
+
+  const partTypeColCount = COLUMN_ORDER.length*2;
+  const rowsHtml = [];
+  sites.forEach(site=>{
+    insurers.forEach(insurer=>{
+      const rule = RULES.find(r=>r.insurer===insurer);
+      const siteVals = rule?.bySite[site.id];
+      if(!siteVals){
+        rowsHtml.push(`<tr>
+          <td style="text-align:left">${GROUP_NAME}</td><td style="text-align:left">${site.name}</td><td>${site.state}</td><td>—</td><td style="text-align:left">${insurer}</td>
+          <td colspan="${partTypeColCount}" class="summary-cell-missing">No rule configured for this insurer at this site</td>
+        </tr>`);
+        return;
+      }
+      const partCells = COLUMN_ORDER.map(key=>{
+        const val = siteVals[key];
+        const expected = expectedValueFor(rule, key);
+        const pctCellClass = val!==expected ? 'class="summary-cell-mismatch"' : '';
+        return `<td ${pctCellClass}>${val}%</td><td>${rule.methods[key]}</td>`;
+      }).join('');
+      rowsHtml.push(`<tr>
+        <td style="text-align:left">${GROUP_NAME}</td><td style="text-align:left">${site.name}</td><td>${site.state}</td><td style="text-align:left">${rule.name}</td><td style="text-align:left">${insurer}</td>
+        ${partCells}
+      </tr>`);
+    });
+  });
+  const bodyHtml = rowsHtml.join('') || `<tr><td colspan="${5+partTypeColCount}"><div class="empty-hint">No rows match this filter.</div></td></tr>`;
+
+  const partTypeHeaders = COLUMN_ORDER.map(key=>{
+    const p = PART_TYPES.find(x=>x.key===key);
+    return `<th>${p.label} Margin %</th><th>${p.label} Method</th>`;
+  }).join('');
+
+  const insurerOptions = ['all',...INSURERS].map(i=>`<option value="${i}" ${summaryInsurer===i?'selected':''}>${i==='all'?'All Insurers':i}</option>`).join('');
+  const siteOptions = ['all',...SITES.map(s=>s.id)].map(id=>{
+    const label = id==='all' ? 'All Sites' : siteName(id);
+    return `<option value="${id}" ${summarySite===id?'selected':''}>${label}</option>`;
+  }).join('');
+
+  return `
+    <div class="page-title">Margin Rule Summary</div>
+    <div class="page-sub" style="margin-bottom:18px">Same layout as the Group Margin Rules Extract report, with one addition: gaps and drift are flagged inline instead of needing to be spotted by eye.</div>
+
+    <div class="summary-filterbar">
+      <div class="f-item">
+        <label>Site:</label>
+        <select onchange="summarySite=this.value; renderSummaryPage();">${siteOptions}</select>
+      </div>
+      <div class="f-item">
+        <label>Insurer:</label>
+        <select onchange="summaryInsurer=this.value; renderSummaryPage();">${insurerOptions}</select>
+      </div>
+      <button class="btn btn-blue" onclick="showToast('Would export this summary to CSV — not wired in this prototype')">Export</button>
+    </div>
+
+    ${legend}
+
+    <div style="overflow-x:auto">
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Group</th><th>Site</th><th>State</th><th>Margin Rule</th><th>Insurer</th>
+            ${partTypeHeaders}
+          </tr>
+        </thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ---------- SHARED: margin % / pricing method input rows for an edit panel ---------- */
+const PRICING_METHODS = ['Charge of List','Markup on Cost','Not Acceptable','Show Markup On Cost'];
+function buildMarginInputRows(rule, scope){
+  return COLUMN_ORDER.map(key=>{
+    const pt = PART_TYPES.find(p=>p.key===key);
+    const st = fieldStats(rule, key, scope);
+    const val = st.mixed ? '' : st.value;
+    const currentMethod = rule.methods[key];
+    const methodOptions = PRICING_METHODS.map(m=>`<option ${m===currentMethod?'selected':''}>${m}</option>`).join('');
+    return `<tr>
+      <td style="width:150px"><span class="pt-dot" style="background:${pt.color}"></span>${pt.label}</td>
+      <td style="width:150px"><input class="margin-input ${st.mixed?'warn':''}" data-part="${key}" type="number" value="${val}" placeholder="${st.mixed?st.min+'-'+st.max:''}"><span class="pct-suffix">%</span>${st.mixed?`<span class="mixed-hint">currently ${st.min}%–${st.max}% across sites</span>`:''}</td>
+      <td><select class="method-select" data-method-part="${key}">${methodOptions}</select></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---------- BY INSURER VIEW ---------- */
+function buildInsurerViewHTML(){
+  const n = selectedSites.size;
+  const label = n===SITES.length ? 'All 6 sites' : `${n} site${n>1?'s':''} selected`;
+  const visible = RULES.filter(r => ruleSitesInSelection(r).length>0);
+
+  const rowsHtml = visible.length===0
+    ? `<tr><td colspan="9"><div class="empty-hint">No margin rules apply to the selected site(s) yet.<br><br><button class="btn btn-green" onclick="openCreateModal()">+ Create a rule</button></div></td></tr>`
+    : visible.map(rule=>buildInsurerRuleRow(rule)).join('');
+
+  return `<div class="results-line">Showing rules applicable to <b>${n} of ${SITES.length}</b> site${n>1?'s':''}</div>
+    <div class="group">
+      <div class="group-head" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+        <div class="group-head-title">Margin Rules — ${label}</div>
+        <div class="group-caret">▲</div>
+      </div>
+      <div>
+        <table class="rules-table">
+          <thead>
+            <tr>
+              <th>Margin Rule Name <span class="sort">▾</span></th>
+              <th>Insurer <span class="sort">▾</span></th>
+              <th>Sites <span class="sort">▾</span></th>
+              <th>OEM</th>
+              <th>Parallel</th>
+              <th>Aftermarket</th>
+              <th>Recycled</th>
+              <th>Recon.</th>
+              <th style="width:80px">Action</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function buildInsurerRuleRow(rule){
+  const scope = ruleSitesInSelection(rule);
+  const totalUsing = Object.keys(rule.bySite).length;
+  const isMixedAny = COLUMN_ORDER.some(k => fieldStats(rule,k,scope).mixed);
+  const editing = editingRuleId===rule.id;
+
+  const pctCells = COLUMN_ORDER.map(key=>{
+    const st = fieldStats(rule, key, scope);
+    const methodNote = `<div class="method-note">${rule.methods[key]}</div>`;
+    return st.mixed
+      ? `<td class="num mixed-tag">${st.min}–${st.max}%<small>MIXED</small>${methodNote}</td>`
+      : `<td class="num">${st.value}%${methodNote}</td>`;
+  }).join('');
+
+  const rowHtml = `<tr class="${editing?'editing':''} ${isMixedAny?'mixed':''}">
+    <td class="rule-name-cell">${rule.name}${rule.isDefault?'<div class="rule-default-tag">Default rule</div>':''}</td>
+    <td>${rule.insurer}</td>
+    <td>${scope.length}/${totalUsing===SITES.length?SITES.length:totalUsing} selected<div class="sites-note">${totalUsing===SITES.length?'all sites':totalUsing+' of 6 sites use this'}</div></td>
+    ${pctCells}
+    <td>
+      <button class="icon-btn-sm icon-btn-edit" title="Edit" onclick="toggleEdit('${rule.id}')">✎</button>
+    </td>
+  </tr>`;
+
+  const editRow = editing ? `<tr class="edit-panel-row"><td colspan="9">${buildInsurerEditPanel(rule, scope)}</td></tr>` : '';
+  return rowHtml + editRow;
+}
+
+function buildInsurerEditPanel(rule, scope){
+  const n = scope.length;
+  const impact = n>1
+    ? `<div class="impact-note"><b>Bulk edit:</b>&nbsp; Saving will update the <b>${rule.name}</b> rule for all <b>${n} selected sites</b> at once, including any that currently differ.</div>`
+    : `<div class="impact-note solo"><b>Editing 1 site:</b>&nbsp; ${siteName(scope[0])} only. Other sites on this rule are unaffected.</div>`;
+
+  const rows = buildMarginInputRows(rule, scope);
+  const chips = scope.map(sid=>`<span class="f-chip">${siteName(sid)}${scope.length>1?` <span class="x" onclick="removeSiteFromScope('${sid}')">✕</span>`:''}</span>`).join('');
+
+  return `<div class="edit-panel">
+    <div class="ep-title">Editing "${rule.name}" — applies to ${n} site${n>1?'s':''}</div>
+    ${impact}
+    <table class="margin-table">
+      <tr><th>Part Type</th><th>Margin %</th><th>Pricing Method</th></tr>
+      ${rows}
+    </table>
+    <div class="ep-cols">
+      <div class="ep-col">
+        <div class="ep-col-label">Applies To</div>
+        <div class="applies-box">${chips}</div>
+        <div class="applies-add" onclick="restoreAllScope()">+ change site selection</div>
+      </div>
+    </div>
+    <div class="ep-footer">
+      <button class="btn btn-outline" onclick="cancelEdit()">Cancel</button>
+      <button class="btn btn-green" onclick="saveRule('${rule.id}')">Save — update ${n} site${n>1?'s':''}</button>
+    </div>
+  </div>`;
+}
+
+function toggleEdit(id){ editingRuleId = (editingRuleId===id)?null:id; renderMainView(); }
+function cancelEdit(){ editingRuleId=null; renderMainView(); }
+function removeSiteFromScope(sid){ selectedSites.delete(sid); if(selectedSites.size===0) selectedSites.add(sid); renderAll(); }
+function restoreAllScope(){ selectedSites = new Set(SITES.map(s=>s.id)); renderAll(); }
+
+function saveRule(ruleId){
+  const rule = RULES.find(r=>r.id===ruleId);
+  const scope = ruleSitesInSelection(rule);
+  const panel = document.querySelector('.edit-panel');
+  const updates = {};
+  panel.querySelectorAll('.margin-input').forEach(inp=>{ if(inp.value!=='') updates[inp.dataset.part]=Number(inp.value); });
+  panel.querySelectorAll('.method-select').forEach(sel=>{ rule.methods[sel.dataset.methodPart] = sel.value; });
+  scope.forEach(sid=>Object.assign(rule.bySite[sid], updates));
+  editingRuleId=null;
+  renderAll();
+  showToast(`Updated "${rule.name}" margin rule for ${scope.length} site${scope.length>1?'s':''}`);
+}
+
+/* ---------- BY SITE VIEW ---------- */
+function buildSiteViewHTML(){
+  const sites = SITES.filter(s=>selectedSites.has(s.id));
+  if(sites.length===0){
+    return `<div class="results-line">No sites selected</div>`;
+  }
+  const label = sites.length===SITES.length ? 'All 6 sites' : `${sites.length} site${sites.length>1?'s':''} selected`;
+  return `<div class="results-line">Showing <b>${sites.length} of ${SITES.length}</b> site${sites.length>1?'s':''} — ${label}</div>`
+    + sites.map(site=>buildSiteGroup(site)).join('');
+}
+
+function buildSiteGroup(site){
+  const rulesForSite = RULES.filter(r => r.bySite[site.id] && selectedInsurers.has(r.insurer));
+  const rowsHtml = rulesForSite.length===0
+    ? `<tr><td colspan="9"><div class="empty-hint">No margin rules set up for ${site.name} yet.<br><br><button class="btn btn-green" onclick="openCreateModal()">+ Create a rule</button></div></td></tr>`
+    : rulesForSite.map(rule=>buildSiteRuleRow(site, rule)).join('');
+
+  return `<div class="group">
+    <div class="group-head" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+      <div class="group-head-title">${site.name}</div>
+      <div class="group-caret">▲</div>
+    </div>
+    <div>
+      <table class="rules-table">
+        <thead>
+          <tr>
+            <th>Margin Rule Name <span class="sort">▾</span></th>
+            <th>Insurer <span class="sort">▾</span></th>
+            <th>Sites <span class="sort">▾</span></th>
+            <th>OEM</th>
+            <th>Parallel</th>
+            <th>Aftermarket</th>
+            <th>Recycled</th>
+            <th>Recon.</th>
+            <th style="width:80px">Action</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function buildSiteRuleRow(site, rule){
+  const key = site.id+'::'+rule.id;
+  const editing = editingSiteKey===key;
+  const vals = rule.bySite[site.id];
+  const pctCells = COLUMN_ORDER.map(k=>`<td class="num">${vals[k]}%<div class="method-note">${rule.methods[k]}</div></td>`).join('');
+
+  const rowHtml = `<tr class="${editing?'editing':''}">
+    <td class="rule-name-cell">${rule.name}${rule.isDefault?'<div class="rule-default-tag">Default rule</div>':''}</td>
+    <td>${rule.insurer}</td>
+    <td>${site.name}</td>
+    ${pctCells}
+    <td><button class="icon-btn-sm icon-btn-edit" title="Edit" onclick="toggleSiteEdit('${site.id}','${rule.id}')">✎</button></td>
+  </tr>`;
+
+  const editRow = editing ? `<tr class="edit-panel-row"><td colspan="9">${buildSiteEditPanel(site, rule)}</td></tr>` : '';
+  return rowHtml + editRow;
+}
+
+function buildSiteEditPanel(site, rule){
+  const rows = buildMarginInputRows(rule, [site.id]);
+  return `<div class="edit-panel">
+    <div class="ep-title">Editing "${rule.name}" — ${site.name}</div>
+    <div class="impact-note solo"><b>Editing 1 site:</b>&nbsp; ${site.name} only. Other sites on this rule are unaffected.</div>
+    <table class="margin-table">
+      <tr><th>Part Type</th><th>Margin %</th><th>Pricing Method</th></tr>
+      ${rows}
+    </table>
+    <div class="ep-footer">
+      <button class="btn btn-outline" onclick="cancelSiteEdit()">Cancel</button>
+      <button class="btn btn-green" onclick="saveSiteRule('${site.id}','${rule.id}')">Save</button>
+    </div>
+  </div>`;
+}
+
+function toggleSiteEdit(siteId, ruleId){
+  const key = siteId+'::'+ruleId;
+  editingSiteKey = (editingSiteKey===key) ? null : key;
+  renderMainView();
+}
+function cancelSiteEdit(){ editingSiteKey=null; renderMainView(); }
+function saveSiteRule(siteId, ruleId){
+  const rule = RULES.find(r=>r.id===ruleId);
+  const panel = document.querySelector('.edit-panel');
+  const updates = {};
+  panel.querySelectorAll('.margin-input').forEach(inp=>{ if(inp.value!=='') updates[inp.dataset.part]=Number(inp.value); });
+  panel.querySelectorAll('.method-select').forEach(sel=>{ rule.methods[sel.dataset.methodPart] = sel.value; });
+  Object.assign(rule.bySite[siteId], updates);
+  editingSiteKey=null;
+  renderMainView();
+  showToast(`Updated "${rule.name}" margin rule for ${siteName(siteId)}`);
+}
+
+/* ---------- CREATE / EDIT MODAL ---------- */
+function renderModalSiteChips(){
+  document.getElementById('modalSiteChips').innerHTML = SITES.map(s=>{
+    if(!modalSites.has(s.id)) return '';
+    return `<span class="f-chip">${s.name} <span class="x" onclick="modalRemoveSite('${s.id}')">✕</span></span>`;
+  }).join('') || '<span style="color:#999">No sites selected</span>';
+}
+function modalRemoveSite(id){ modalSites.delete(id); renderModalSiteChips(); }
+function modalSelectAllSites(){ modalSites = new Set(SITES.map(s=>s.id)); renderModalSiteChips(); }
+function setStatus(active){
+  modalStatusActive = active;
+  document.getElementById('statusActive').classList.toggle('active', active);
+  document.getElementById('statusInactive').classList.toggle('active', !active);
+}
+function renderModalMarginTable(){
+  const rowsHtml = COLUMN_ORDER.map(key=>{
+    const pt = PART_TYPES.find(p=>p.key===key);
+    const methodOptions = PRICING_METHODS.map(m=>`<option ${m===DEFAULT_METHODS[key]?'selected':''}>${m}</option>`).join('');
+    return `<tr><td style="width:150px"><span class="pt-dot" style="background:${pt.color}"></span>${pt.label}</td>
+      <td style="width:150px"><input class="margin-input" data-part="${key}" type="number" value="20"><span class="pct-suffix">%</span></td>
+      <td><select class="method-select" data-method-part="${key}">${methodOptions}</select></td></tr>`;
+  }).join('');
+  document.getElementById('modalMarginTable').innerHTML = `<tr><th>Part Type</th><th>Margin %</th><th>Pricing Method</th></tr>${rowsHtml}`;
+}
+function openCreateModal(){
+  document.getElementById('modalTitle').textContent = 'Create Margin Rule';
+  document.getElementById('mRuleName').value = '';
+  modalSites = new Set(SITES.map(s=>s.id));
+  setStatus(true);
+  renderModalSiteChips();
+  renderModalMarginTable();
+  document.getElementById('createModal').classList.add('show');
+}
+function closeCreateModal(){ document.getElementById('createModal').classList.remove('show'); }
+function saveModalRule(){
+  const name = document.getElementById('mRuleName').value || document.getElementById('mInsurer').value;
+  const insurer = document.getElementById('mInsurer').value;
+  const id = 'r_'+Date.now();
+  const margins = {};
+  document.querySelectorAll('#modalMarginTable .margin-input').forEach(inp=>{ margins[inp.dataset.part] = Number(inp.value)||0; });
+  const methods = {};
+  document.querySelectorAll('#modalMarginTable .method-select').forEach(sel=>{ methods[sel.dataset.methodPart] = sel.value; });
+  const bySite = {};
+  [...modalSites].forEach(sid=>{ bySite[sid] = {...margins}; });
+  RULES.push({id, name, insurer, isDefault:false, methods, bySite});
+  closeCreateModal();
+  renderAll();
+  showToast(`"${name}" created for ${modalSites.size} site${modalSites.size>1?'s':''}`);
+}
+
+/* ---------- TOAST ---------- */
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), 3400);
+}
+
+/* ---------- INIT ---------- */
+function renderAll(){ renderFilterChips(); renderMainView(); }
+renderAll();
+</script>
+</body>
+</html>

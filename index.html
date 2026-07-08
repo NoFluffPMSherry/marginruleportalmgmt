@@ -310,11 +310,8 @@ table.rules-table{width:100%;border-collapse:collapse}
       <div class="modal-intro">This rule controls how part prices are calculated when quoting for an insurer. When active, it will automatically apply margins to quotes that match its conditions — for every site it is applied to.</div>
 
       <div class="section-head">Basic Information</div>
-      <div class="form-grid4">
+      <div class="form-grid2">
         <div class="ff"><label>Rule Name *</label><input type="text" id="mRuleName" placeholder="e.g. NRMA Standard"></div>
-        <div class="ff"><label>Price Mode *</label>
-          <select><option>Fixed</option><option>Tiered</option></select>
-        </div>
         <div class="ff"><label>Status</label>
           <div class="status-toggle">
             <div class="status-pill active" id="statusActive" onclick="setStatus(true)"><span class="sdot"></span>Active</div>
@@ -333,11 +330,11 @@ table.rules-table{width:100%;border-collapse:collapse}
       <div class="section-head">Applies To Insurers</div>
       <div class="note-callout">One rule can cover multiple insurer brands that share the same margins — e.g. NRMA, RACV and CGU are all IAG and typically run one shared rule.</div>
       <div class="f-combo" id="modalInsurersCombo"></div>
+      <div class="f-select-hint">Use the insurer name exactly as it appears in the quoting package (the debtor name on incoming quotes) so new quotes map to this rule automatically.</div>
 
       <div class="section-head">Applies To Sites</div>
       <div class="note-callout">New in Phase 2 — one rule can now be assigned to multiple sites at once. Editing margins below will update every site listed here in a single save.</div>
-      <div class="applies-box" id="modalSiteChips"></div>
-      <div class="applies-add" onclick="modalSelectAllSites()">+ Select all 6 sites</div>
+      <div class="f-combo" id="modalSitesCombo"></div>
 
       <div class="section-head">Margin Settings</div>
       <table class="margin-table" id="modalMarginTable"></table>
@@ -1031,14 +1028,32 @@ document.addEventListener('click', (e)=>{
   if(modalInsurersComboOpen && !e.target.closest('#modalInsurersCombo')){ modalInsurersComboOpen=false; renderModalInsurersCombo(); }
 });
 
-function renderModalSiteChips(){
-  document.getElementById('modalSiteChips').innerHTML = SITES.map(s=>{
-    if(!modalSites.has(s.id)) return '';
-    return `<span class="f-chip">${s.name} <span class="x" onclick="modalRemoveSite('${s.id}')">✕</span></span>`;
-  }).join('') || '<span style="color:#999">No sites selected</span>';
+let modalSitesComboOpen = false;
+function renderModalSitesCombo(){
+  const box = document.getElementById('modalSitesCombo');
+  if(!box) return;
+  const chips = [...modalSites].map(sid=>
+    `<span class="f-chip">${siteName(sid)} <span class="x" onclick="event.stopPropagation();modalRemoveSite('${sid}')">✕</span></span>`
+  ).join('');
+  const remaining = SITES.filter(s=>!modalSites.has(s.id));
+  const rows = remaining.length
+    ? `<div class="f-combo-row" onclick="event.stopPropagation();modalSelectAllSites()"><b>All Sites</b></div>`
+      + remaining.map(s=>`<div class="f-combo-row" onclick="event.stopPropagation();modalAddSite('${s.id}')">${s.name}</div>`).join('')
+    : `<div class="f-combo-row f-combo-empty">No more sites</div>`;
+  box.innerHTML = `
+    <div class="f-combo-input" onclick="event.stopPropagation();toggleModalSitesCombo()">
+      ${chips}
+      ${modalSites.size===0 ? `<span class="f-combo-placeholder">No sites selected</span>` : ''}
+    </div>
+    <div class="f-combo-list ${modalSitesComboOpen?'show':''}">${rows}</div>`;
 }
-function modalRemoveSite(id){ modalSites.delete(id); renderModalSiteChips(); }
-function modalSelectAllSites(){ modalSites = new Set(SITES.map(s=>s.id)); renderModalSiteChips(); }
+function toggleModalSitesCombo(){ modalSitesComboOpen = !modalSitesComboOpen; renderModalSitesCombo(); }
+function modalAddSite(id){ modalSites.add(id); renderModalSitesCombo(); }
+function modalRemoveSite(id){ modalSites.delete(id); renderModalSitesCombo(); }
+function modalSelectAllSites(){ modalSites = new Set(SITES.map(s=>s.id)); renderModalSitesCombo(); }
+document.addEventListener('click', (e)=>{
+  if(modalSitesComboOpen && !e.target.closest('#modalSitesCombo')){ modalSitesComboOpen=false; renderModalSitesCombo(); }
+});
 function setStatus(active){
   modalStatusActive = active;
   document.getElementById('statusActive').classList.toggle('active', active);
@@ -1060,9 +1075,10 @@ function openCreateModal(){
   modalInsurers = new Set();
   modalInsurersComboOpen = false;
   modalSites = new Set(SITES.map(s=>s.id));
+  modalSitesComboOpen = false;
   setStatus(true);
   renderModalInsurersCombo();
-  renderModalSiteChips();
+  renderModalSitesCombo();
   renderModalMarginTable();
   document.getElementById('createModal').classList.add('show');
 }

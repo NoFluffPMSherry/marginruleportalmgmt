@@ -564,8 +564,9 @@ function filterCombo(id, text){
 }
 function selectComboItem(id, val){
   comboSet(id).add(val);
-  // Picking a Margin Rule pulls in the insurers/sites/states it actually covers, so the
-  // filter panel reflects that rule's real footprint instead of leaving siblings on "All".
+  // Every filter should stay mutually consistent with what's on screen: picking a Margin
+  // Rule pulls in the insurers/sites/states it covers; picking a State/Insurer/Site pulls
+  // in whichever Margin Rule(s) are actually valid under the resulting selection.
   if(id==='ruleFilterBox'){
     const rule = RULES.find(r=>r.name===val);
     if(rule){
@@ -576,6 +577,8 @@ function selectComboItem(id, val){
         if(site) selectedStates.add(site.state);
       });
     }
+  } else {
+    RULES.filter(r => ruleSitesInSelection(r).length>0).forEach(r=>selectedRuleNames.add(r.name));
   }
   editingRuleId=null; editingSiteKey=null;
   renderAll();

@@ -52,7 +52,11 @@ a{color:#3aa54f;text-decoration:none;cursor:pointer}
 /* ---------- filter panel (mirrors Supplier Management filter block) ---------- */
 .filter-panel{display:flex;gap:26px}
 .filter-map{width:150px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;padding-top:6px}
-.filter-map svg{width:120px;fill:#3aa54f;opacity:.9}
+.filter-map svg{width:140px}
+.filter-map path,.filter-map circle{cursor:pointer;stroke:#fff;stroke-width:1.4;transition:fill .15s,opacity .15s}
+.filter-map path.state-on,.filter-map circle.state-on{fill:#3aa54f}
+.filter-map path.state-off,.filter-map circle.state-off{fill:#c7c7c7}
+.filter-map path:hover,.filter-map circle:hover{opacity:.82}
 .filter-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:18px 24px}
 .f-label{font-size:12.5px;font-weight:bold;color:#333;margin-bottom:6px;display:block}
 .f-box{border:1px solid #ccc;border-radius:5px;background:#fff;padding:8px 10px;min-height:36px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -249,17 +253,12 @@ table.rules-table{width:100%;border-collapse:collapse}
 
     <!-- FILTER PANEL -->
     <div class="filter-panel">
-      <div class="filter-map">
-        <svg viewBox="0 0 135 120">
-          <path d="M18 10 C30 4 55 2 68 8 C82 5 100 8 112 18 C124 24 130 34 128 44 C133 50 130 60 122 62 C124 70 118 78 110 78 C112 86 104 92 96 90 C92 98 80 100 72 96 C64 102 50 100 44 94 C34 96 24 90 22 80 C12 78 4 68 6 58 C-2 52 0 40 8 34 C4 26 8 16 18 10 Z"/>
-          <ellipse cx="30" cy="106" rx="7" ry="4"/>
-        </svg>
-      </div>
+      <div class="filter-map" id="stateMap"></div>
       <div style="flex:1">
         <div class="filter-grid">
           <div>
             <label class="f-label">Select States</label>
-            <div class="f-box placeholder"><select><option>All States</option></select></div>
+            <div class="f-combo" id="stateFilterBox"></div>
           </div>
           <div>
             <label class="f-label">Part Type</label>
@@ -411,29 +410,81 @@ let RULES = [
     bySite:{ s1:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s3:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s5:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20} } },
 ];
 
-let selectedSites = new Set(SITES.map(s=>s.id));
-let selectedInsurers = new Set(INSURERS);
+// Empty selection = "All" (no restriction) — mirrors Supplier Management's
+// placeholder behaviour, where nothing chosen means nothing is filtered out.
+let selectedSites = new Set();
+let selectedInsurers = new Set();
+let selectedStates = new Set();
 let currentView = 'insurer'; // 'insurer' | 'site'
 let editingRuleId = null; // used by the "By Insurer" view
+let editScopeSites = new Set(); // sites the rule being edited applies to (add/remove happens here, committed on Save)
 let editingSiteKey = null; // used by the "By Site" view, format "<siteId>::<ruleId>"
 let modalSites = new Set(SITES.map(s=>s.id));
 let modalStatusActive = true;
 
+// Simplified AU state outlines for the clickable state-selector map — stylised,
+// not survey-accurate, but topologically consistent (shared borders line up).
+const STATE_SHAPES = [
+  {code:'WA',  d:'M14,46 L35,20 L70,12 L100,10 L100,118 L100,183 L70,188 L55,178 L28,155 L12,110 Z'},
+  {code:'NT',  d:'M100,10 L130,14 L144,36 L150,58 L150,120 L100,118 Z'},
+  {code:'QLD', d:'M150,58 L172,28 L190,12 L204,40 L217,75 L224,108 L228,134 L150,150 L150,120 Z'},
+  {code:'SA',  d:'M100,118 L150,120 L150,150 L150,183 L120,205 L85,195 L100,183 Z'},
+  {code:'NSW', d:'M228,134 L222,160 L208,180 L150,183 L150,150 Z'},
+  {code:'VIC', d:'M150,183 L208,180 L188,198 L155,202 L120,205 Z'},
+  {code:'TAS', d:'M165,213 L178,208 L188,215 L182,225 L168,224 Z'},
+];
+const ALL_STATE_CODES = [...STATE_SHAPES.map(s=>s.code), 'ACT'];
+const DEFAULT_MARGIN_VALUES = {oem:20,parallel:20,aftermarket:20,recycled:20,recon:20};
+
 /* ---------- HELPERS ---------- */
 function siteName(id){ return SITES.find(s=>s.id===id)?.name || id; }
-function ruleSitesInSelection(rule){ return Object.keys(rule.bySite).filter(sid => selectedSites.has(sid) && selectedInsurers.has(rule.insurer)); }
+
+// Sites left after applying the State + Site filters together.
+function sitesMatchingFilters(){
+  return SITES.filter(s =>
+    (selectedStates.size===0 || selectedStates.has(s.state)) &&
+    (selectedSites.size===0 || selectedSites.has(s.id))
+  );
+}
+function ruleSitesInSelection(rule){
+  const scopedIds = new Set(sitesMatchingFilters().map(s=>s.id));
+  return Object.keys(rule.bySite).filter(sid => scopedIds.has(sid) && (selectedInsurers.size===0 || selectedInsurers.has(rule.insurer)));
+}
 function fieldStats(rule, key, scope){
+  if(scope.length===0) return {mixed:false, value:'', min:0, max:0};
   const vals = scope.map(sid => rule.bySite[sid][key]);
   const unique = [...new Set(vals)];
   return {mixed: unique.length>1, value: unique.length===1?unique[0]:null, min:Math.min(...vals), max:Math.max(...vals)};
 }
 
-/* ---------- FILTER COMBOBOXES (search input + chips + dropdown list, matching the real Suppliers/Repairers field) ---------- */
-function insurersAvailableFor(siteIdSet){
-  return INSURERS.filter(ins => RULES.some(r => r.insurer===ins && [...siteIdSet].some(sid=>r.bySite[sid])));
+/* ---------- STATE MAP ---------- */
+function renderStateMap(){
+  const el = document.getElementById('stateMap');
+  if(!el) return;
+  const isOn = code => selectedStates.size===0 || selectedStates.has(code);
+  const paths = STATE_SHAPES.map(s =>
+    `<path data-state="${s.code}" class="${isOn(s.code)?'state-on':'state-off'}" d="${s.d}" onclick="toggleMapState('${s.code}')"><title>${s.code}</title></path>`
+  ).join('');
+  const act = `<circle data-state="ACT" class="${isOn('ACT')?'state-on':'state-off'}" cx="196" cy="172" r="3.2" onclick="toggleMapState('ACT')"><title>ACT</title></circle>`;
+  el.innerHTML = `<svg viewBox="0 0 240 220">${paths}${act}</svg>`;
+}
+function toggleMapState(code){
+  if(selectedStates.has(code)) selectedStates.delete(code); else selectedStates.add(code);
+  editingRuleId=null; editingSiteKey=null;
+  renderAll();
 }
 
-let openComboId = null; // 'siteFilterBox' | 'insurerFilterBox' | null
+/* ---------- FILTER COMBOBOXES (search input + chips + dropdown list, matching the real Suppliers/Repairers field) ---------- */
+function insurersAvailableFor(siteIds){
+  return INSURERS.filter(ins => RULES.some(r => r.insurer===ins && siteIds.some(sid=>r.bySite[sid])));
+}
+function comboSet(id){
+  if(id==='siteFilterBox') return selectedSites;
+  if(id==='insurerFilterBox') return selectedInsurers;
+  if(id==='stateFilterBox') return selectedStates;
+}
+
+let openComboId = null; // 'siteFilterBox' | 'insurerFilterBox' | 'stateFilterBox' | null
 
 function renderComboBox(id, options, selectedSet, allLabel){
   const chips = [...selectedSet].map(val=>{
@@ -455,18 +506,27 @@ function renderComboBox(id, options, selectedSet, allLabel){
 }
 
 function renderFilterChips(){
-  document.getElementById('siteFilterBox').innerHTML = renderComboBox(
-    'siteFilterBox', SITES.map(s=>({id:s.id, label:s.name})), selectedSites, 'All Sites'
+  document.getElementById('stateFilterBox').innerHTML = renderComboBox(
+    'stateFilterBox', ALL_STATE_CODES.map(c=>({id:c, label:c})), selectedStates, 'All States'
   );
 
-  const availableInsurers = insurersAvailableFor(selectedSites);
-  // Insurer selection can only include insurers that actually have a rule at the currently selected site(s).
+  // Site options narrow to the selected state(s); selection itself is untouched by that narrowing.
+  const siteOptions = SITES.filter(s => selectedStates.size===0 || selectedStates.has(s.state));
+  document.getElementById('siteFilterBox').innerHTML = renderComboBox(
+    'siteFilterBox', siteOptions.map(s=>({id:s.id, label:s.name})), selectedSites, 'All Sites'
+  );
+
+  const scopedSiteIds = sitesMatchingFilters().map(s=>s.id);
+  const availableInsurers = insurersAvailableFor(scopedSiteIds);
+  // Prune insurer chips that no longer have a rule at the currently selected site(s) — an empty
+  // result correctly falls back to "All Insurers" rather than being force-refilled.
   selectedInsurers = new Set([...selectedInsurers].filter(i=>availableInsurers.includes(i)));
-  if(selectedInsurers.size===0) selectedInsurers = new Set(availableInsurers);
 
   document.getElementById('insurerFilterBox').innerHTML = renderComboBox(
     'insurerFilterBox', availableInsurers.map(i=>({id:i, label:i})), selectedInsurers, 'All Insurers'
   );
+
+  renderStateMap();
 }
 
 function openCombo(id){
@@ -481,14 +541,12 @@ function filterCombo(id, text){
   });
 }
 function selectComboItem(id, val){
-  if(id==='siteFilterBox') selectedSites.add(val); else selectedInsurers.add(val);
+  comboSet(id).add(val);
   editingRuleId=null; editingSiteKey=null;
   renderAll();
 }
 function removeComboItem(id, val){
-  const set = id==='siteFilterBox' ? selectedSites : selectedInsurers;
-  set.delete(val);
-  if(set.size===0) set.add(val); // never allow filtering down to zero — mirrors the previous chip behaviour
+  comboSet(id).delete(val); // removing the last chip correctly falls back to "All ___", not a forced refill
   editingRuleId=null; editingSiteKey=null;
   renderAll();
 }
@@ -500,8 +558,9 @@ document.addEventListener('click', (e)=>{
 });
 
 function resetFilters(){
-  selectedSites = new Set(SITES.map(s=>s.id));
-  selectedInsurers = new Set(INSURERS);
+  selectedSites = new Set();
+  selectedInsurers = new Set();
+  selectedStates = new Set();
   editingRuleId=null; editingSiteKey=null; openComboId=null;
   renderAll();
   showToast('Filters reset');
@@ -646,7 +705,7 @@ function buildMarginInputRows(rule, scope){
 
 /* ---------- BY INSURER VIEW ---------- */
 function buildInsurerViewHTML(){
-  const n = selectedSites.size;
+  const n = sitesMatchingFilters().length;
   const label = n===SITES.length ? 'All 6 sites' : `${n} site${n>1?'s':''} selected`;
   const visible = RULES.filter(r => ruleSitesInSelection(r).length>0);
 
@@ -705,21 +764,23 @@ function buildInsurerRuleRow(rule){
     </td>
   </tr>`;
 
-  const editRow = editing ? `<tr class="edit-panel-row"><td colspan="9">${buildInsurerEditPanel(rule, scope)}</td></tr>` : '';
+  const editRow = editing ? `<tr class="edit-panel-row"><td colspan="9">${buildInsurerEditPanel(rule)}</td></tr>` : '';
   return rowHtml + editRow;
 }
 
-function buildInsurerEditPanel(rule, scope){
+function buildInsurerEditPanel(rule){
+  const scope = [...editScopeSites];
   const n = scope.length;
   const impact = n>1
     ? `<div class="impact-note"><b>Bulk edit:</b>&nbsp; Saving will update the <b>${rule.name}</b> rule for all <b>${n} selected sites</b> at once, including any that currently differ.</div>`
-    : `<div class="impact-note solo"><b>Editing 1 site:</b>&nbsp; ${siteName(scope[0])} only. Other sites on this rule are unaffected.</div>`;
+    : n===1
+      ? `<div class="impact-note solo"><b>Editing 1 site:</b>&nbsp; ${siteName(scope[0])} only. Other sites on this rule are unaffected.</div>`
+      : `<div class="impact-note"><b>No sites selected</b> — add at least one site below before saving.</div>`;
 
   const rows = buildMarginInputRows(rule, scope);
-  const chips = scope.map(sid=>`<span class="f-chip">${siteName(sid)}${scope.length>1?` <span class="x" onclick="removeSiteFromScope('${sid}')">✕</span>`:''}</span>`).join('');
 
   return `<div class="edit-panel">
-    <div class="ep-title">Editing "${rule.name}" — applies to ${n} site${n>1?'s':''}</div>
+    <div class="ep-title">Editing "${rule.name}"${n?` — applies to ${n} site${n>1?'s':''}`:''}</div>
     ${impact}
     <table class="margin-table">
       <tr><th>Part Type</th><th>Margin %</th><th>Pricing Method</th></tr>
@@ -727,41 +788,83 @@ function buildInsurerEditPanel(rule, scope){
     </table>
     <div class="ep-cols">
       <div class="ep-col">
-        <div class="ep-col-label">Applies To</div>
-        <div class="applies-box">${chips}</div>
-        <div class="applies-add" onclick="restoreAllScope()">+ change site selection</div>
+        <div class="ep-col-label">Sites</div>
+        <div class="f-combo" id="editSitesCombo"></div>
       </div>
     </div>
     <div class="ep-footer">
       <button class="btn btn-outline" onclick="cancelEdit()">Cancel</button>
-      <button class="btn btn-green" onclick="saveRule('${rule.id}')">Save — update ${n} site${n>1?'s':''}</button>
+      <button class="btn btn-green" ${n===0?'disabled':''} onclick="saveRule('${rule.id}')">Save${n?` — update ${n} site${n>1?'s':''}`:''}</button>
     </div>
   </div>`;
 }
 
-function toggleEdit(id){ editingRuleId = (editingRuleId===id)?null:id; renderMainView(); }
-function cancelEdit(){ editingRuleId=null; renderMainView(); }
-function removeSiteFromScope(sid){ selectedSites.delete(sid); if(selectedSites.size===0) selectedSites.add(sid); renderAll(); }
-function restoreAllScope(){ selectedSites = new Set(SITES.map(s=>s.id)); renderAll(); }
+/* "Sites" combo inside the edit panel — its own add/remove dropdown, separate
+   from the page-level filters, so editing a rule's site membership doesn't
+   disturb what's currently filtered on screen. */
+let editComboOpen = false;
+function renderEditSitesBox(){
+  const box = document.getElementById('editSitesCombo');
+  if(!box) return;
+  const chips = [...editScopeSites].map(sid=>
+    `<span class="f-chip">${siteName(sid)} <span class="x" onclick="event.stopPropagation();editRemoveSite('${sid}')">✕</span></span>`
+  ).join('');
+  const remaining = SITES.filter(s=>!editScopeSites.has(s.id));
+  const rows = remaining.length
+    ? remaining.map(s=>`<div class="f-combo-row" onclick="event.stopPropagation();editAddSite('${s.id}')">${s.name}</div>`).join('')
+    : `<div class="f-combo-row f-combo-empty">No more sites</div>`;
+  box.innerHTML = `
+    <div class="f-combo-input" onclick="event.stopPropagation();toggleEditCombo()">
+      ${chips}
+      ${editScopeSites.size===0 ? `<span class="f-combo-placeholder">No sites selected</span>` : ''}
+    </div>
+    <div class="f-combo-list ${editComboOpen?'show':''}">${rows}</div>`;
+}
+function toggleEditCombo(){ editComboOpen = !editComboOpen; renderEditSitesBox(); }
+function editAddSite(sid){ editScopeSites.add(sid); renderEditSitesBox(); }
+function editRemoveSite(sid){ editScopeSites.delete(sid); renderEditSitesBox(); }
+document.addEventListener('click', (e)=>{
+  if(editComboOpen && !e.target.closest('#editSitesCombo')){ editComboOpen=false; renderEditSitesBox(); }
+});
+
+function toggleEdit(id){
+  if(editingRuleId===id){
+    editingRuleId=null;
+  } else {
+    editingRuleId=id;
+    editScopeSites = new Set(Object.keys(RULES.find(r=>r.id===id).bySite));
+    editComboOpen=false;
+  }
+  renderMainView();
+  if(editingRuleId) renderEditSitesBox();
+}
+function cancelEdit(){ editingRuleId=null; editScopeSites=new Set(); renderMainView(); }
 
 function saveRule(ruleId){
   const rule = RULES.find(r=>r.id===ruleId);
-  const scope = ruleSitesInSelection(rule);
   const panel = document.querySelector('.edit-panel');
   const updates = {};
   panel.querySelectorAll('.margin-input').forEach(inp=>{ if(inp.value!=='') updates[inp.dataset.part]=Number(inp.value); });
   panel.querySelectorAll('.method-select').forEach(sel=>{ rule.methods[sel.dataset.methodPart] = sel.value; });
-  scope.forEach(sid=>Object.assign(rule.bySite[sid], updates));
-  editingRuleId=null;
+
+  // Unassign sites removed from the "Sites" field during this edit.
+  Object.keys(rule.bySite).forEach(sid=>{ if(!editScopeSites.has(sid)) delete rule.bySite[sid]; });
+  // Assign/update sites currently in the "Sites" field — newly added sites start from the default margins.
+  editScopeSites.forEach(sid=>{
+    rule.bySite[sid] = Object.assign({}, rule.bySite[sid] || DEFAULT_MARGIN_VALUES, updates);
+  });
+
+  const n = editScopeSites.size;
+  editingRuleId=null; editScopeSites=new Set();
   renderAll();
-  showToast(`Updated "${rule.name}" margin rule for ${scope.length} site${scope.length>1?'s':''}`);
+  showToast(`Updated "${rule.name}" margin rule for ${n} site${n>1?'s':''}`);
 }
 
 /* ---------- BY SITE VIEW ---------- */
 function buildSiteViewHTML(){
-  const sites = SITES.filter(s=>selectedSites.has(s.id));
+  const sites = sitesMatchingFilters();
   if(sites.length===0){
-    return `<div class="results-line">No sites selected</div>`;
+    return `<div class="results-line">No sites match the selected filters</div>`;
   }
   const label = sites.length===SITES.length ? 'All 6 sites' : `${sites.length} site${sites.length>1?'s':''} selected`;
   return `<div class="results-line">Showing <b>${sites.length} of ${SITES.length}</b> site${sites.length>1?'s':''} — ${label}</div>`
@@ -769,7 +872,7 @@ function buildSiteViewHTML(){
 }
 
 function buildSiteGroup(site){
-  const rulesForSite = RULES.filter(r => r.bySite[site.id] && selectedInsurers.has(r.insurer));
+  const rulesForSite = RULES.filter(r => r.bySite[site.id] && (selectedInsurers.size===0 || selectedInsurers.has(r.insurer)));
   const rowsHtml = rulesForSite.length===0
     ? `<tr><td colspan="9"><div class="empty-hint">No margin rules set up for ${site.name} yet.<br><br><button class="btn btn-green" onclick="openCreateModal()">+ Create a rule</button></div></td></tr>`
     : rulesForSite.map(rule=>buildSiteRuleRow(site, rule)).join('');

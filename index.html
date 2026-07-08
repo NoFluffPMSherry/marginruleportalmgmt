@@ -280,8 +280,8 @@ table.rules-table{width:100%;border-collapse:collapse}
             <div class="f-combo" id="siteFilterBox"></div>
           </div>
           <div>
-            <label class="f-label">Filter:</label>
-            <div class="f-box placeholder"><select><option>None</option></select></div>
+            <label class="f-label">Select Margin Rules</label>
+            <div class="f-combo" id="ruleFilterBox"></div>
           </div>
         </div>
         <div class="filter-reset-row"><a onclick="resetFilters()">Reset All Filters</a></div>
@@ -415,6 +415,7 @@ let RULES = [
 let selectedSites = new Set();
 let selectedInsurers = new Set();
 let selectedStates = new Set();
+let selectedRuleNames = new Set();
 let currentView = 'insurer'; // 'insurer' | 'site'
 let editingRuleId = null; // used by the "By Insurer" view
 let editScopeSites = new Set(); // sites the rule being edited applies to (add/remove happens here, committed on Save)
@@ -482,6 +483,7 @@ function comboSet(id){
   if(id==='siteFilterBox') return selectedSites;
   if(id==='insurerFilterBox') return selectedInsurers;
   if(id==='stateFilterBox') return selectedStates;
+  if(id==='ruleFilterBox') return selectedRuleNames;
 }
 
 let openComboId = null; // 'siteFilterBox' | 'insurerFilterBox' | 'stateFilterBox' | null
@@ -526,6 +528,17 @@ function renderFilterChips(){
     'insurerFilterBox', availableInsurers.map(i=>({id:i, label:i})), selectedInsurers, 'All Insurers'
   );
 
+  // Rule names narrow to whatever rules actually exist for the currently scoped sites/insurers.
+  const availableRuleNames = [...new Set(RULES.filter(r=>
+    (selectedInsurers.size===0 || selectedInsurers.has(r.insurer)) &&
+    scopedSiteIds.some(sid=>r.bySite[sid])
+  ).map(r=>r.name))];
+  selectedRuleNames = new Set([...selectedRuleNames].filter(n=>availableRuleNames.includes(n)));
+
+  document.getElementById('ruleFilterBox').innerHTML = renderComboBox(
+    'ruleFilterBox', availableRuleNames.map(n=>({id:n, label:n})), selectedRuleNames, 'All Margin Rules'
+  );
+
   renderStateMap();
 }
 
@@ -561,6 +574,7 @@ function resetFilters(){
   selectedSites = new Set();
   selectedInsurers = new Set();
   selectedStates = new Set();
+  selectedRuleNames = new Set();
   editingRuleId=null; editingSiteKey=null; openComboId=null;
   renderAll();
   showToast('Filters reset');
@@ -707,7 +721,7 @@ function buildMarginInputRows(rule, scope){
 function buildInsurerViewHTML(){
   const n = sitesMatchingFilters().length;
   const label = n===SITES.length ? 'All 6 sites' : `${n} site${n>1?'s':''} selected`;
-  const visible = RULES.filter(r => ruleSitesInSelection(r).length>0);
+  const visible = RULES.filter(r => (selectedRuleNames.size===0 || selectedRuleNames.has(r.name)) && ruleSitesInSelection(r).length>0);
 
   const rowsHtml = visible.length===0
     ? `<tr><td colspan="9"><div class="empty-hint">No margin rules apply to the selected site(s) yet.<br><br><button class="btn btn-green" onclick="openCreateModal()">+ Create a rule</button></div></td></tr>`
@@ -872,7 +886,9 @@ function buildSiteViewHTML(){
 }
 
 function buildSiteGroup(site){
-  const rulesForSite = RULES.filter(r => r.bySite[site.id] && (selectedInsurers.size===0 || selectedInsurers.has(r.insurer)));
+  const rulesForSite = RULES.filter(r => r.bySite[site.id]
+    && (selectedInsurers.size===0 || selectedInsurers.has(r.insurer))
+    && (selectedRuleNames.size===0 || selectedRuleNames.has(r.name)));
   const rowsHtml = rulesForSite.length===0
     ? `<tr><td colspan="9"><div class="empty-hint">No margin rules set up for ${site.name} yet.<br><br><button class="btn btn-green" onclick="openCreateModal()">+ Create a rule</button></div></td></tr>`
     : rulesForSite.map(rule=>buildSiteRuleRow(site, rule)).join('');

@@ -122,6 +122,8 @@ table.rules-table{width:100%;border-collapse:collapse}
 .rules-table td.num{font-weight:bold;text-align:center}
 .rules-table td.num small{display:block;font-weight:normal;font-size:9.5px;color:#c98a1e;margin-top:1px}
 .rule-name-cell{font-weight:bold;color:#333}
+.ins-chip{display:inline-block;background:#eaf1fb;border:1px solid #bcd4ef;color:#2f6fb3;border-radius:4px;padding:2px 7px;font-size:11px;margin:2px 4px 2px 0}
+.ins-more{font-size:10.5px;color:#888;display:block;margin-top:2px}
 .rule-default-tag{font-size:10.5px;color:#999;font-weight:normal;margin-top:1px}
 .sites-note{font-size:11px;color:#888;margin-top:1px}
 .method-note{font-size:10px;color:#888;font-weight:normal;margin-top:1px}
@@ -309,10 +311,7 @@ table.rules-table{width:100%;border-collapse:collapse}
 
       <div class="section-head">Basic Information</div>
       <div class="form-grid4">
-        <div class="ff"><label>Rule Name *</label><input type="text" id="mRuleName" placeholder="e.g. RACQ Standard"></div>
-        <div class="ff"><label>Insurer *</label>
-          <select id="mInsurer"><option>Allianz</option><option>AAMI</option><option>Suncorp</option><option>IAG</option><option>RACQ</option><option>QBE</option></select>
-        </div>
+        <div class="ff"><label>Rule Name *</label><input type="text" id="mRuleName" placeholder="e.g. NRMA Standard"></div>
         <div class="ff"><label>Price Mode *</label>
           <select><option>Fixed</option><option>Tiered</option></select>
         </div>
@@ -330,6 +329,10 @@ table.rules-table{width:100%;border-collapse:collapse}
           <div class="toggle-row"><div class="toggle-sw"></div><span class="toggle-label">Auto-apply to new quotes</span></div>
         </div>
       </div>
+
+      <div class="section-head">Applies To Insurers</div>
+      <div class="note-callout">One rule can cover multiple insurer brands that share the same margins — e.g. NRMA, RACV and CGU are all IAG and typically run one shared rule.</div>
+      <div class="f-combo" id="modalInsurersCombo"></div>
 
       <div class="section-head">Applies To Sites</div>
       <div class="note-callout">New in Phase 2 — one rule can now be assigned to multiple sites at once. Editing margins below will update every site listed here in a single save.</div>
@@ -374,7 +377,10 @@ const SITES = [
   {id:'s5', name:'CCR Gold Coast', state:'QLD'},
   {id:'s6', name:'CCR Sunshine Coast', state:'QLD'},
 ];
-const INSURERS = ['Allianz','AAMI','Suncorp','IAG'];
+// Master insurer/brand list — includes both group-level names (Allianz, AAMI,
+// Suncorp, IAG) and brand-level debtor names that share a group's rule
+// (NRMA/RACV/CGU all run on the IAG rule; QBE and GIO on their own).
+const INSURERS = ['Allianz','AAMI','Suncorp','IAG','NRMA','RACV','CGU','QBE'];
 const GROUP_NAME = 'CCR Group';
 
 // Pricing method is a per-rule, per-part-type setting (same across every site
@@ -384,8 +390,11 @@ const DEFAULT_METHODS = {oem:'Charge of List', parallel:'Markup on Cost', afterm
 // Allianz intentionally inconsistent across sites — mirrors the real scenario
 // Luke described (head office wants 30% -> 32% everywhere, had to edit ~18
 // shops individually because there was no bulk-update path).
+// A rule's `insurers` is an array — in reality one rule commonly covers
+// several insurer brands that share identical margins (Luke's NRMA/RACV/CGU
+// example: all three are IAG and run on one shared rule).
 let RULES = [
-  { id:'r_allianz', name:'Allianz', insurer:'Allianz', isDefault:true, methods:{...DEFAULT_METHODS},
+  { id:'r_allianz', name:'Allianz', insurers:['Allianz'], isDefault:true, methods:{...DEFAULT_METHODS},
     bySite:{
       s1:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
       s2:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
@@ -394,19 +403,19 @@ let RULES = [
       s5:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
       s6:{oem:30,parallel:80,aftermarket:20,recycled:20,recon:20},
     }},
-  { id:'r_aami', name:'AAMI', insurer:'AAMI', isDefault:false, methods:{...DEFAULT_METHODS},
+  { id:'r_aami', name:'AAMI', insurers:['AAMI'], isDefault:false, methods:{...DEFAULT_METHODS},
     bySite:{
       s1:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s2:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20},
       s3:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s4:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20},
       s5:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s6:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20},
     }},
-  { id:'r_suncorp', name:'Suncorp', insurer:'Suncorp', isDefault:false, methods:{...DEFAULT_METHODS},
+  { id:'r_suncorp', name:'Suncorp', insurers:['Suncorp'], isDefault:false, methods:{...DEFAULT_METHODS},
     bySite:{
       s1:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70}, s2:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70},
       s3:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70}, s4:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70},
       s5:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70}, s6:{oem:100,parallel:70,aftermarket:20,recycled:20,recon:70},
     }},
-  { id:'r_iag', name:'IAG', insurer:'IAG', isDefault:false, methods:{...DEFAULT_METHODS},
+  { id:'r_iag', name:'IAG', insurers:['IAG','NRMA','RACV','CGU'], isDefault:false, methods:{...DEFAULT_METHODS},
     bySite:{ s1:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s3:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20}, s5:{oem:100,parallel:80,aftermarket:20,recycled:20,recon:20} } },
 ];
 
@@ -449,7 +458,7 @@ function sitesMatchingFilters(){
 }
 function ruleSitesInSelection(rule){
   const scopedIds = new Set(sitesMatchingFilters().map(s=>s.id));
-  return Object.keys(rule.bySite).filter(sid => scopedIds.has(sid) && (selectedInsurers.size===0 || selectedInsurers.has(rule.insurer)));
+  return Object.keys(rule.bySite).filter(sid => scopedIds.has(sid) && (selectedInsurers.size===0 || rule.insurers.some(i=>selectedInsurers.has(i))));
 }
 function fieldStats(rule, key, scope){
   if(scope.length===0) return {mixed:false, value:'', min:0, max:0};
@@ -477,7 +486,7 @@ function toggleMapState(code){
 
 /* ---------- FILTER COMBOBOXES (search input + chips + dropdown list, matching the real Suppliers/Repairers field) ---------- */
 function insurersAvailableFor(siteIds){
-  return INSURERS.filter(ins => RULES.some(r => r.insurer===ins && siteIds.some(sid=>r.bySite[sid])));
+  return INSURERS.filter(ins => RULES.some(r => r.insurers.includes(ins) && siteIds.some(sid=>r.bySite[sid])));
 }
 function comboSet(id){
   if(id==='siteFilterBox') return selectedSites;
@@ -530,7 +539,7 @@ function renderFilterChips(){
 
   // Rule names narrow to whatever rules actually exist for the currently scoped sites/insurers.
   const availableRuleNames = [...new Set(RULES.filter(r=>
-    (selectedInsurers.size===0 || selectedInsurers.has(r.insurer)) &&
+    (selectedInsurers.size===0 || r.insurers.some(i=>selectedInsurers.has(i))) &&
     scopedSiteIds.some(sid=>r.bySite[sid])
   ).map(r=>r.name))];
   selectedRuleNames = new Set([...selectedRuleNames].filter(n=>availableRuleNames.includes(n)));
@@ -555,6 +564,19 @@ function filterCombo(id, text){
 }
 function selectComboItem(id, val){
   comboSet(id).add(val);
+  // Picking a Margin Rule pulls in the insurers/sites/states it actually covers, so the
+  // filter panel reflects that rule's real footprint instead of leaving siblings on "All".
+  if(id==='ruleFilterBox'){
+    const rule = RULES.find(r=>r.name===val);
+    if(rule){
+      rule.insurers.forEach(i=>selectedInsurers.add(i));
+      Object.keys(rule.bySite).forEach(sid=>{
+        selectedSites.add(sid);
+        const site = SITES.find(s=>s.id===sid);
+        if(site) selectedStates.add(site.state);
+      });
+    }
+  }
   editingRuleId=null; editingSiteKey=null;
   renderAll();
 }
@@ -635,7 +657,7 @@ function buildSummaryPageHTML(){
   const rowsHtml = [];
   sites.forEach(site=>{
     insurers.forEach(insurer=>{
-      const rule = RULES.find(r=>r.insurer===insurer);
+      const rule = RULES.find(r=>r.insurers.includes(insurer));
       const siteVals = rule?.bySite[site.id];
       if(!siteVals){
         rowsHtml.push(`<tr>
@@ -738,7 +760,7 @@ function buildInsurerViewHTML(){
           <thead>
             <tr>
               <th>Margin Rule Name <span class="sort">▾</span></th>
-              <th>Insurer <span class="sort">▾</span></th>
+              <th>Insurers <span class="sort">▾</span></th>
               <th>Sites <span class="sort">▾</span></th>
               <th>OEM</th>
               <th>Parallel</th>
@@ -752,6 +774,14 @@ function buildInsurerViewHTML(){
         </table>
       </div>
     </div>`;
+}
+
+// Chips-with-overflow display for a rule's insurer list — mirrors the
+// repairer-side "Applies To" column (e.g. "NRMA Insurance, RACV Insurance, CGU Insurance +4 more").
+function insurerChipsHTML(insurers, max=3){
+  const shown = insurers.slice(0, max);
+  const rest = insurers.length - shown.length;
+  return shown.map(i=>`<span class="ins-chip">${i}</span>`).join('') + (rest>0 ? `<span class="ins-more">+${rest} more</span>` : '');
 }
 
 function buildInsurerRuleRow(rule){
@@ -770,7 +800,7 @@ function buildInsurerRuleRow(rule){
 
   const rowHtml = `<tr class="${editing?'editing':''} ${isMixedAny?'mixed':''}">
     <td class="rule-name-cell">${rule.name}${rule.isDefault?'<div class="rule-default-tag">Default rule</div>':''}</td>
-    <td>${rule.insurer}</td>
+    <td>${insurerChipsHTML(rule.insurers)}</td>
     <td>${scope.length}/${totalUsing===SITES.length?SITES.length:totalUsing} selected<div class="sites-note">${totalUsing===SITES.length?'all sites':totalUsing+' of 6 sites use this'}</div></td>
     ${pctCells}
     <td>
@@ -794,7 +824,7 @@ function buildInsurerEditPanel(rule){
   const rows = buildMarginInputRows(rule, scope);
 
   return `<div class="edit-panel">
-    <div class="ep-title">Editing "${rule.name}"${n?` — applies to ${n} site${n>1?'s':''}`:''}</div>
+    <div class="ep-title">Editing "${rule.name}" (${rule.insurers.join(', ')})${n?` — applies to ${n} site${n>1?'s':''}`:''}</div>
     ${impact}
     <table class="margin-table">
       <tr><th>Part Type</th><th>Margin %</th><th>Pricing Method</th></tr>
@@ -887,7 +917,7 @@ function buildSiteViewHTML(){
 
 function buildSiteGroup(site){
   const rulesForSite = RULES.filter(r => r.bySite[site.id]
-    && (selectedInsurers.size===0 || selectedInsurers.has(r.insurer))
+    && (selectedInsurers.size===0 || r.insurers.some(i=>selectedInsurers.has(i)))
     && (selectedRuleNames.size===0 || selectedRuleNames.has(r.name)));
   const rowsHtml = rulesForSite.length===0
     ? `<tr><td colspan="9"><div class="empty-hint">No margin rules set up for ${site.name} yet.<br><br><button class="btn btn-green" onclick="openCreateModal()">+ Create a rule</button></div></td></tr>`
@@ -903,7 +933,7 @@ function buildSiteGroup(site){
         <thead>
           <tr>
             <th>Margin Rule Name <span class="sort">▾</span></th>
-            <th>Insurer <span class="sort">▾</span></th>
+            <th>Insurers <span class="sort">▾</span></th>
             <th>Sites <span class="sort">▾</span></th>
             <th>OEM</th>
             <th>Parallel</th>
@@ -927,7 +957,7 @@ function buildSiteRuleRow(site, rule){
 
   const rowHtml = `<tr class="${editing?'editing':''}">
     <td class="rule-name-cell">${rule.name}${rule.isDefault?'<div class="rule-default-tag">Default rule</div>':''}</td>
-    <td>${rule.insurer}</td>
+    <td>${insurerChipsHTML(rule.insurers)}</td>
     <td>${site.name}</td>
     ${pctCells}
     <td><button class="icon-btn-sm icon-btn-edit" title="Edit" onclick="toggleSiteEdit('${site.id}','${rule.id}')">✎</button></td>
@@ -972,6 +1002,32 @@ function saveSiteRule(siteId, ruleId){
 }
 
 /* ---------- CREATE / EDIT MODAL ---------- */
+let modalInsurers = new Set();
+let modalInsurersComboOpen = false;
+function renderModalInsurersCombo(){
+  const box = document.getElementById('modalInsurersCombo');
+  if(!box) return;
+  const chips = [...modalInsurers].map(i=>
+    `<span class="f-chip">${i} <span class="x" onclick="event.stopPropagation();modalRemoveInsurer('${i}')">✕</span></span>`
+  ).join('');
+  const remaining = INSURERS.filter(i=>!modalInsurers.has(i));
+  const rows = remaining.length
+    ? remaining.map(i=>`<div class="f-combo-row" onclick="event.stopPropagation();modalAddInsurer('${i}')">${i}</div>`).join('')
+    : `<div class="f-combo-row f-combo-empty">No more insurers</div>`;
+  box.innerHTML = `
+    <div class="f-combo-input" onclick="event.stopPropagation();toggleModalInsurersCombo()">
+      ${chips}
+      ${modalInsurers.size===0 ? `<span class="f-combo-placeholder">No insurers selected</span>` : ''}
+    </div>
+    <div class="f-combo-list ${modalInsurersComboOpen?'show':''}">${rows}</div>`;
+}
+function toggleModalInsurersCombo(){ modalInsurersComboOpen = !modalInsurersComboOpen; renderModalInsurersCombo(); }
+function modalAddInsurer(i){ modalInsurers.add(i); renderModalInsurersCombo(); }
+function modalRemoveInsurer(i){ modalInsurers.delete(i); renderModalInsurersCombo(); }
+document.addEventListener('click', (e)=>{
+  if(modalInsurersComboOpen && !e.target.closest('#modalInsurersCombo')){ modalInsurersComboOpen=false; renderModalInsurersCombo(); }
+});
+
 function renderModalSiteChips(){
   document.getElementById('modalSiteChips').innerHTML = SITES.map(s=>{
     if(!modalSites.has(s.id)) return '';
@@ -998,16 +1054,19 @@ function renderModalMarginTable(){
 function openCreateModal(){
   document.getElementById('modalTitle').textContent = 'Create Margin Rule';
   document.getElementById('mRuleName').value = '';
+  modalInsurers = new Set();
+  modalInsurersComboOpen = false;
   modalSites = new Set(SITES.map(s=>s.id));
   setStatus(true);
+  renderModalInsurersCombo();
   renderModalSiteChips();
   renderModalMarginTable();
   document.getElementById('createModal').classList.add('show');
 }
 function closeCreateModal(){ document.getElementById('createModal').classList.remove('show'); }
 function saveModalRule(){
-  const name = document.getElementById('mRuleName').value || document.getElementById('mInsurer').value;
-  const insurer = document.getElementById('mInsurer').value;
+  const insurers = [...modalInsurers];
+  const name = document.getElementById('mRuleName').value || insurers.join(' / ') || 'New Rule';
   const id = 'r_'+Date.now();
   const margins = {};
   document.querySelectorAll('#modalMarginTable .margin-input').forEach(inp=>{ margins[inp.dataset.part] = Number(inp.value)||0; });
@@ -1015,7 +1074,7 @@ function saveModalRule(){
   document.querySelectorAll('#modalMarginTable .method-select').forEach(sel=>{ methods[sel.dataset.methodPart] = sel.value; });
   const bySite = {};
   [...modalSites].forEach(sid=>{ bySite[sid] = {...margins}; });
-  RULES.push({id, name, insurer, isDefault:false, methods, bySite});
+  RULES.push({id, name, insurers, isDefault:false, methods, bySite});
   closeCreateModal();
   renderAll();
   showToast(`"${name}" created for ${modalSites.size} site${modalSites.size>1?'s':''}`);
